@@ -1,7 +1,6 @@
 package simpledb.tx;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import simpledb.file.*;
 import simpledb.log.LogMgr;
@@ -133,7 +132,7 @@ public class Transaction {
     * @return the integer stored at that offset
     */
    public int getInt(BlockId blk, int offset) {
-      concurMgr.sLock(blk);
+      concurMgr.sLock(blk, txnum);
       Buffer buff = mybuffers.getBuffer(blk);
       return buff.contents().getInt(offset);
    }
@@ -148,7 +147,7 @@ public class Transaction {
     * @return the string stored at that offset
     */
    public String getString(BlockId blk, int offset) {
-      concurMgr.sLock(blk);
+      concurMgr.sLock(blk, txnum);
       Buffer buff = mybuffers.getBuffer(blk);
       return buff.contents().getString(offset);
    }
@@ -167,7 +166,7 @@ public class Transaction {
     * @param val the value to be stored
     */
    public void setInt(BlockId blk, int offset, int val, boolean okToLog) {
-      concurMgr.xLock(blk);
+      concurMgr.xLock(blk, txnum);
       Buffer buff = mybuffers.getBuffer(blk);
       int lsn = -1;
       if (okToLog)
@@ -191,7 +190,7 @@ public class Transaction {
     * @param val the value to be stored
     */
    public void setString(BlockId blk, int offset, String val, boolean okToLog) {
-      concurMgr.xLock(blk);
+      concurMgr.xLock(blk, txnum);
       Buffer buff = mybuffers.getBuffer(blk);
       int lsn = -1;
       if (okToLog)
@@ -211,7 +210,7 @@ public class Transaction {
     */
    public int size(String filename) {
       BlockId dummyblk = new BlockId(filename, END_OF_FILE);
-      concurMgr.sLock(dummyblk);
+      concurMgr.sLock(dummyblk, txnum);
       return fm.length(filename);
    }
    
@@ -225,7 +224,7 @@ public class Transaction {
     */
    public BlockId append(String filename) {
       BlockId dummyblk = new BlockId(filename, END_OF_FILE);
-      concurMgr.xLock(dummyblk);
+      concurMgr.xLock(dummyblk, txnum);
       return fm.append(filename);
    }
    

@@ -18,7 +18,7 @@ public class ConcurrencyMgr {
     * all transactions share the same table.
     */
    private static LockTable locktbl = new LockTable();
-   private Map<BlockId,String> locks  = new HashMap<BlockId,String>();
+   private Map<BlockId,List<Integer>> locks  = new HashMap<BlockId,List<Integer>>();
 
    /**
     * Obtain an SLock on the block, if necessary.
@@ -26,10 +26,12 @@ public class ConcurrencyMgr {
     * if the transaction currently has no locks on that block.
     * @param blk a reference to the disk block
     */
-   public void sLock(BlockId blk) {
+   public void sLock(BlockId blk, int txnum) {
       if (locks.get(blk) == null) {
-         locktbl.sLock(blk);
-         locks.put(blk, "S");
+         locktbl.sLock(blk, txnum);
+         List<Integer> existingLocks = locks.getOrDefault(blk, new ArrayList<>());
+         existingLocks.add(txnum);
+         locks.put(blk, existingLocks);
       }
    }
 
@@ -40,11 +42,13 @@ public class ConcurrencyMgr {
     * (if necessary), and then upgrades it to an XLock.
     * @param blk a reference to the disk block
     */
-   public void xLock(BlockId blk) {
+   public void xLock(BlockId blk, int txnum) {
       if (!hasXLock(blk)) {
-         sLock(blk);
-         locktbl.xLock(blk);
-         locks.put(blk, "X");
+         sLock(blk, txnum);
+         locktbl.xLock(blk, txnum);
+         List<Integer> existingLocks = new ArrayList<>();
+         existingLocks.add(-txnum);
+         locks.put(blk, existingLocks);
       }
    }
 
@@ -53,13 +57,17 @@ public class ConcurrencyMgr {
     * unlock each one.
     */
    public void release() {
-      for (BlockId blk : locks.keySet()) 
-         locktbl.unlock(blk);
+      for (BlockId blk : locks.keySet()) {
+         List<Integer> txLocks = locks.get(blk);
+         for (Integer tx : txLocks) {
+            locktbl.unlock(blk, tx);
+         }
+      }
       locks.clear();
    }
 
    private boolean hasXLock(BlockId blk) {
-      String locktype = locks.get(blk);
-      return locktype != null && locktype.equals("X");
+      List<Integer> locktype = locks.get(blk);
+      return locktype != null && locktype.get(0) < 0;
    }
 }

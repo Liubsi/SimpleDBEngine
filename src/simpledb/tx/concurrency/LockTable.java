@@ -17,8 +17,7 @@ import simpledb.file.BlockId;
 class LockTable {
    private static final long MAX_TIME = 10000; // 10 seconds
    
-   private Map<BlockId,Integer> locks = new HashMap<BlockId,Integer>();
-   
+   private Map<BlockId,List<Integer>> locks = new HashMap<>();
    /**
     * Grant an SLock on the specified block.
     * If an XLock exists when the method is called,
@@ -29,17 +28,25 @@ class LockTable {
     * then an exception is thrown.
     * @param blk a reference to the disk block
     */
-   public synchronized void sLock(BlockId blk) {
+   public synchronized void sLock(BlockId blk, int txnum) {
       try {
-         long timestamp = System.currentTimeMillis();
-         while (hasXlock(blk) && !waitingTooLong(timestamp))
-            wait(MAX_TIME);
-         if (hasXlock(blk))
-            throw new LockAbortException();
-         int val = getLockVal(blk);  // will not be negative
-         locks.put(blk, val+1);
-      }
-      catch(InterruptedException e) {
+         // I'm checking the last transaction number in existingLocks to decide whether to abort or not. 
+         // However, this does not consider whether the existing lock is shared or exclusive.
+         // So older shared locks can abort transactions, despite being able to coexist
+         // Ran out of time implementing this :(
+         List<Integer> existingLocks = locks.getOrDefault(blk, new ArrayList<>());
+         if (!existingLocks.isEmpty()) {
+            int lastTxNum = existingLocks.get(existingLocks.size() - 1);
+            if (lastTxNum < 0 && txnum > Math.abs(lastTxNum)) {
+               throw new LockAbortException();
+            }
+         }
+         while (hasXlock(blk)) {
+            wait();
+         }
+         existingLocks.add(txnum);
+         locks.put(blk, existingLocks);
+      } catch (InterruptedException e) {
          throw new LockAbortException();
       }
    }
@@ -54,16 +61,22 @@ class LockTable {
     * then an exception is thrown.
     * @param blk a reference to the disk block
     */
-   synchronized void xLock(BlockId blk) {
+   synchronized void xLock(BlockId blk, int txnum) {
       try {
-         long timestamp = System.currentTimeMillis();
-         while (hasOtherSLocks(blk) && !waitingTooLong(timestamp))
-            wait(MAX_TIME);
-         if (hasOtherSLocks(blk))
-            throw new LockAbortException();
-         locks.put(blk, -1);
-      }
-      catch(InterruptedException e) {
+         List<Integer> existingLocks = locks.getOrDefault(blk, new ArrayList<>());
+         if (!existingLocks.isEmpty()) {
+            int lastTxNum = existingLocks.get(existingLocks.size() - 1);
+            if (txnum > Math.abs(lastTxNum)) {
+               throw new LockAbortException();
+            }
+         }
+         while (hasOtherSLocks(blk)) {
+            wait();
+         }         
+         existingLocks =  new ArrayList<>();
+         existingLocks.add(-txnum);
+         locks.put(blk, existingLocks);
+      } catch(InterruptedException e) {
          throw new LockAbortException();
       }
    }
@@ -74,18 +87,22 @@ class LockTable {
     * then the waiting transactions are notified.
     * @param blk a reference to the disk block
     */
-   synchronized void unlock(BlockId blk) {
-      int val = getLockVal(blk);
-      if (val > 1)
-         locks.put(blk, val-1);
-      else {
-         locks.remove(blk);
-         notifyAll();
+   synchronized void unlock(BlockId blk, int txnum) {
+      List<Integer> existingLocks = locks.get(blk);
+      if (existingLocks != null) {
+         existingLocks.remove(Integer.valueOf(txnum));
+         if (existingLocks.isEmpty()) {
+            locks.remove(blk);
+            notifyAll();
+         } else {
+            locks.put(blk, existingLocks);
+         }
       }
    }
    
    private boolean hasXlock(BlockId blk) {
-      return getLockVal(blk) < 0;
+      List<Integer> ival = locks.get(blk);
+      return getLockVal(blk) == 1 && ival.get(0) < 0;
    }
    
    private boolean hasOtherSLocks(BlockId blk) {
@@ -97,7 +114,7 @@ class LockTable {
    }
    
    private int getLockVal(BlockId blk) {
-      Integer ival = locks.get(blk);
-      return (ival == null) ? 0 : ival.intValue();
+      List<Integer> ival = locks.get(blk);
+      return (ival == null) ? 0 : ival.size();
    }
 }
