@@ -10,6 +10,7 @@ import simpledb.tx.Transaction;
  */
 public class RecordPage {
    public static final int EMPTY = 0, USED = 1;
+   public static final int NULL = 1, NOTNULL = 0;
    private Transaction tx;
    private BlockId blk;
    private Layout layout;
@@ -52,6 +53,12 @@ public class RecordPage {
    public void setInt(int slot, String fldname, int val) {
       int fldpos = offset(slot) + layout.offset(fldname);
       tx.setInt(blk, fldpos, val, true);
+
+      // set field to non-null
+      int bitpos = layout.bitPosition(fldname);
+      int flag = tx.getInt(blk, offset(slot));
+      flag = setBitVal(flag, bitpos, NOTNULL);
+      tx.setInt(blk, offset(slot), flag, true);
    }
 
    /**
@@ -63,6 +70,12 @@ public class RecordPage {
    public void setString(int slot, String fldname, String val) {
       int fldpos = offset(slot) + layout.offset(fldname);
       tx.setString(blk, fldpos, val, true);
+
+      // set field to non-null
+      int bitpos = layout.bitPosition(fldname);
+      int flag = tx.getInt(blk, offset(slot));
+      flag = setBitVal(flag, bitpos, NOTNULL);
+      tx.setInt(blk, offset(slot), flag, true);
    }
    
    public void delete(int slot) {
@@ -116,7 +129,8 @@ public class RecordPage {
    private int searchAfter(int slot, int flag) {
       slot++;
       while (isValidSlot(slot)) {
-         if (tx.getInt(blk, offset(slot)) == flag)
+         int currentFlag = tx.getInt(blk, offset(slot));
+         if (getBitVal(currentFlag, 0) == flag)
             return slot;
          slot++;
       }
@@ -129,6 +143,29 @@ public class RecordPage {
 
    private int offset(int slot) {
       return slot * layout.slotSize();
+   }
+
+   public void setNull(int slot, String fldname) {
+      int bitpos = layout.bitPosition(fldname);
+      int flag = tx.getInt(blk, offset(slot));
+      flag = setBitVal(flag, bitpos, NULL);
+      tx.setInt(blk, offset(slot), flag, true);
+   }
+   
+   public boolean isNull(int slot, String fldname) {
+      int bitpos = layout.bitPosition(fldname);
+      int flag = tx.getInt(blk, offset(slot));
+      return getBitVal(flag, bitpos) == NULL;
+   }
+     
+   private int getBitVal(int val, int bitpos) {
+      return (val >> bitpos) % 2;
+   }
+  
+   private int setBitVal(int val, int bitpos, int flag) {
+      int mask = (1 << bitpos);
+      if (flag == 0) return val & ~mask;
+      else return val | mask;
    }
 }
 

@@ -15,6 +15,7 @@ public class Layout {
    private Schema schema;
    private Map<String,Integer> offsets;
    private int slotsize;
+   private Map<String, Integer> bitPositions;
 
    /**
     * This constructor creates a Layout object from a schema. 
@@ -33,6 +34,13 @@ public class Layout {
          pos += lengthInBytes(fldname);
       }
       slotsize = pos;
+
+      bitPositions = new HashMap<>();
+      int bitpos = 1;
+      for (String fldname : schema.fields()) {
+         bitPositions.put(fldname, bitpos);
+         bitpos++;
+      }
    }
 
    /**
@@ -44,10 +52,15 @@ public class Layout {
     * @param offsets the already-calculated offsets of the fields within a record
     * @param recordlen the already-calculated length of each record
     */
-   public Layout(Schema schema, Map<String,Integer> offsets, int slotsize) {
+   public Layout(Schema schema, Map<String,Integer> offsets, Map<String, Integer> bitPositions, int slotsize) {
       this.schema    = schema;
       this.offsets   = offsets;
       this.slotsize = slotsize;
+      this.bitPositions = bitPositions;
+   }
+
+   public int bitPosition(String fldname) {
+      return bitPositions.get(fldname);
    }
 
    /**
