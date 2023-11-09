@@ -111,6 +111,35 @@ public class TableScan implements UpdateScan {
       return new RID(rp.block().number(), currentslot);
    }
 
+   public boolean isNull(String fldname) {
+      return rp.isNull(currentslot, fldname);
+   }
+   
+   public void setNull(String fldname) {
+      rp.setNull(currentslot, fldname);
+   }
+
+   public void afterLast() {
+      moveToBlock(tx.size(filename) - 1); 
+      currentslot = rp.slots(); 
+  }
+
+  public boolean previous() {
+      if (currentslot > rp.slots()) {
+          currentslot = rp.slots() - 1;
+      } else {
+          currentslot = rp.nextBefore(currentslot); 
+      }
+      
+      while (currentslot < 0) {
+          if (rp.block().number() == 0)
+              return false;
+          moveToBlock(rp.block().number() - 1);
+          currentslot = rp.slots() - 1;
+      }
+      return true;
+  }
+
    // Private auxiliary methods
 
    private void moveToBlock(int blknum) {

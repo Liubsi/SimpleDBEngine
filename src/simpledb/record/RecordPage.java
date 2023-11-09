@@ -116,6 +116,34 @@ public class RecordPage {
    public BlockId block() {
       return blk;
    }
+
+   public void setNull(int slot, String fldname) {
+      int bitpos = layout.bitPosition(fldname);
+      int flag = tx.getInt(blk, offset(slot));
+      flag = setBitVal(flag, bitpos, NULL);
+      tx.setInt(blk, offset(slot), flag, true);
+   }
+   
+   public boolean isNull(int slot, String fldname) {
+      int bitpos = layout.bitPosition(fldname);
+      int flag = tx.getInt(blk, offset(slot));
+      return getBitVal(flag, bitpos) == NULL;
+   }
+
+   public int slots() {
+      return tx.blockSize() / layout.slotSize();
+   }
+
+   public int nextBefore(int slot) {
+      int prevSlot = slot - 1;
+        while (prevSlot >= 0) {
+            if (isSlotUsed(prevSlot)) {
+                return prevSlot;
+            }
+            prevSlot--;
+        }
+        return -1;
+      }
    
    // Private auxiliary methods
    
@@ -144,19 +172,6 @@ public class RecordPage {
    private int offset(int slot) {
       return slot * layout.slotSize();
    }
-
-   public void setNull(int slot, String fldname) {
-      int bitpos = layout.bitPosition(fldname);
-      int flag = tx.getInt(blk, offset(slot));
-      flag = setBitVal(flag, bitpos, NULL);
-      tx.setInt(blk, offset(slot), flag, true);
-   }
-   
-   public boolean isNull(int slot, String fldname) {
-      int bitpos = layout.bitPosition(fldname);
-      int flag = tx.getInt(blk, offset(slot));
-      return getBitVal(flag, bitpos) == NULL;
-   }
      
    private int getBitVal(int val, int bitpos) {
       return (val >> bitpos) % 2;
@@ -167,6 +182,11 @@ public class RecordPage {
       if (flag == 0) return val & ~mask;
       else return val | mask;
    }
+
+   private boolean isSlotUsed(int slot) {
+      int flag = tx.getInt(blk, offset(slot));
+      return getBitVal(flag, 0) == USED;
+  }
 }
 
 
